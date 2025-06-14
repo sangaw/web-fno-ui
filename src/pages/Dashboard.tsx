@@ -1,128 +1,138 @@
-import { useEffect, useState } from 'react';
-import { Paper, Typography, Box } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid/DataGrid';
+import { useState, useEffect } from 'react';
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
-import type { Position } from '../utils/csvParser';
-import { parseCSV } from '../utils/csvParser';
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  useTheme,
+} from '@mui/material';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { parseCSV, type Position } from '../utils/csvParser';
+import { useLocation } from 'react-router-dom';
 
-export const Dashboard = () => {
+export default function Dashboard() {
   const [positions, setPositions] = useState<Position[]>([]);
-  const [totalPnl, setTotalPnl] = useState(0);
+  const [filteredPositions, setFilteredPositions] = useState<Position[]>([]);
+  const theme = useTheme();
+  const location = useLocation();
 
   useEffect(() => {
-    fetch('/src/data/positions.csv')
-      .then((response) => response.text())
-      .then((data) => {
-        const parsedData = parseCSV(data);
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/src/data/positions.csv');
+        const csvText = await response.text();
+        const parsedData = parseCSV(csvText);
         setPositions(parsedData);
-        const total = parsedData.reduce((sum, pos) => sum + pos.pnl, 0);
-        setTotalPnl(total);
-      })
-      .catch((error) => console.error('Error loading CSV:', error));
+      } catch (error) {
+        console.error('Error loading positions:', error);
+      }
+    };
+
+    fetchData();
   }, []);
 
-  const columns = [
-    { field: 'instrument', headerName: 'Instrument', width: 250 },
-    { field: 'quantity', headerName: 'Qty', width: 100 },
-    {
-      field: 'averagePrice',
-      headerName: 'Avg Price',
-      width: 130,
-      valueFormatter: (params: any) => `₹${params.value.toLocaleString()}`,
-    },
-    {
-      field: 'lastTradedPrice',
-      headerName: 'LTP',
-      width: 130,
-      valueFormatter: (params: any) => `₹${params.value.toLocaleString()}`,
-    },
-    {
-      field: 'pnl',
-      headerName: 'P&L',
-      width: 130,
-      valueFormatter: (params: any) => `₹${params.value.toLocaleString()}`,
-      cellClassName: (params: any) =>
-        params.value >= 0 ? 'positive-pnl' : 'negative-pnl',
-    },
-    {
-      field: 'change',
-      headerName: 'Chg %',
-      width: 130,
-      valueFormatter: (params: any) => `${params.value.toFixed(2)}%`,
-      cellClassName: (params: any) =>
-        params.value >= 0 ? 'positive-change' : 'negative-change',
-    },
-  ];
+  useEffect(() => {
+    const path = location.pathname;
+    let filtered = positions;
 
-  const chartData = positions.map((pos) => ({
-    name: pos.instrument.split(' ')[0],
-    pnl: pos.pnl,
+    if (path === '/total') {
+      // Show all positions
+      filtered = positions;
+    } else if (path.startsWith('/nifty')) {
+      filtered = positions.filter(p => 
+        p.instrument.includes('NIFTY') && !p.instrument.includes('BANKNIFTY')
+      );
+      if (path.includes('jun')) {
+        filtered = filtered.filter(p => p.instrument.includes('JUN'));
+      } else if (path.includes('jul')) {
+        filtered = filtered.filter(p => p.instrument.includes('JUL'));
+      } else if (path.includes('aug')) {
+        filtered = filtered.filter(p => p.instrument.includes('AUG'));
+      }
+    } else if (path.startsWith('/banknifty')) {
+      filtered = positions.filter(p => p.instrument.includes('BANKNIFTY'));
+      if (path.includes('jun')) {
+        filtered = filtered.filter(p => p.instrument.includes('JUN'));
+      } else if (path.includes('jul')) {
+        filtered = filtered.filter(p => p.instrument.includes('JUL'));
+      } else if (path.includes('aug')) {
+        filtered = filtered.filter(p => p.instrument.includes('AUG'));
+      }
+    }
+
+    setFilteredPositions(filtered);
+  }, [location.pathname, positions]);
+
+  const totalPnL = filteredPositions.reduce((sum, position) => sum + position.pnl, 0);
+  const totalQuantity = filteredPositions.reduce((sum, position) => sum + position.quantity, 0);
+
+  const pnlData = filteredPositions.map(position => ({
+    name: position.instrument,
+    pnl: position.pnl,
   }));
 
   return (
     <Box sx={{ 
+      height: '100%', 
       display: 'flex', 
       flexDirection: 'column', 
-      gap: 2,
-      height: '100%',
-      overflow: 'hidden',
-      p: 2
+      gap: 3, 
+      p: 3,
+      minHeight: 0,
     }}>
-      <Box sx={{ 
+      <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(3, 1fr)', 
-        gap: 2,
-        flexShrink: 0
-      }}>
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Total P&L
-          </Typography>
-          <Typography
-            variant="h4"
-            color={totalPnl >= 0 ? 'success.main' : 'error.main'}
-          >
-            ₹{totalPnl.toLocaleString()}
-          </Typography>
-        </Paper>
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Open Positions
-          </Typography>
-          <Typography variant="h4" color="primary">
-            {positions.length}
-          </Typography>
-        </Paper>
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Net Quantity
-          </Typography>
-          <Typography variant="h4" color="primary">
-            {positions.reduce((sum, pos) => sum + pos.quantity, 0)}
-          </Typography>
-        </Paper>
-      </Box>
-
-      <Paper sx={{ 
-        p: 2, 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+        gap: '1rem',
         flexShrink: 0,
-        height: 300
       }}>
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Total P&L
+            </Typography>
+            <Typography variant="h4" component="div" color={totalPnL >= 0 ? 'success.main' : 'error.main'}>
+              ₹{totalPnL.toLocaleString()}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Number of Positions
+            </Typography>
+            <Typography variant="h4" component="div">
+              {filteredPositions.length}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              Total Quantity
+            </Typography>
+            <Typography variant="h4" component="div">
+              {totalQuantity}
+            </Typography>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Paper sx={{ p: 2, flexShrink: 0 }}>
         <Typography variant="h6" gutterBottom>
-          P&L Distribution
+          P&L Chart
         </Typography>
-        <Box sx={{ height: 'calc(100% - 40px)' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
+        <div style={{ width: '100%', height: 300 }}>
+          <ResponsiveContainer>
+            <LineChart data={pnlData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
@@ -131,52 +141,57 @@ export const Dashboard = () => {
               <Line
                 type="monotone"
                 dataKey="pnl"
-                stroke="#2196f3"
+                stroke={theme.palette.primary.main}
                 name="P&L"
               />
             </LineChart>
           </ResponsiveContainer>
-        </Box>
+        </div>
       </Paper>
 
-      <Paper sx={{ 
-        p: 2, 
-        flex: 1,
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <Paper sx={{ p: 2, flex: 1, minHeight: 0, overflow: 'auto' }}>
         <Typography variant="h6" gutterBottom>
-          Open Positions
+          Positions
         </Typography>
-        <Box sx={{ flex: 1, minHeight: 0 }}>
-          <DataGrid
-            rows={positions}
-            columns={columns}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 10, page: 0 },
-              },
-            }}
-            pageSizeOptions={[10, 25, 50]}
-            disableRowSelectionOnClick
-            sx={{
-              '& .positive-pnl': {
-                color: 'success.main',
-              },
-              '& .negative-pnl': {
-                color: 'error.main',
-              },
-              '& .positive-change': {
-                color: 'success.main',
-              },
-              '& .negative-change': {
-                color: 'error.main',
-              },
-            }}
-          />
-        </Box>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Product</TableCell>
+                <TableCell>Instrument</TableCell>
+                <TableCell align="right">Qty</TableCell>
+                <TableCell align="right">Avg</TableCell>
+                <TableCell align="right">LTP</TableCell>
+                <TableCell align="right">P&L</TableCell>
+                <TableCell align="right">Chg</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredPositions.map((position) => (
+                <TableRow key={position.id.toString()}>
+                  <TableCell>{position.product}</TableCell>
+                  <TableCell>{position.instrument}</TableCell>
+                  <TableCell align="right">{position.quantity}</TableCell>
+                  <TableCell align="right">{position.averagePrice.toFixed(2)}</TableCell>
+                  <TableCell align="right">{position.lastTradedPrice.toFixed(2)}</TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: position.pnl >= 0 ? 'success.main' : 'error.main' }}
+                  >
+                    ₹{position.pnl.toLocaleString()}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: position.change >= 0 ? 'success.main' : 'error.main' }}
+                  >
+                    {position.change.toFixed(2)}%
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Paper>
     </Box>
   );
-}; 
+} 

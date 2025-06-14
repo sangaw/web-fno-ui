@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -6,14 +7,16 @@ import {
   Drawer,
   IconButton,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   Toolbar,
   Typography,
   useMediaQuery,
+  Collapse,
+  ListItemSecondaryAction,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
@@ -22,24 +25,74 @@ import {
   Settings as SettingsIcon,
   Brightness4,
   Brightness7,
+  ExpandLess,
+  ExpandMore,
 } from '@mui/icons-material';
-import { useTheme as useCustomTheme } from '../theme/ThemeContext';
+import { useTheme } from '../theme/ThemeContext';
 
 const drawerWidth = 240;
 
-const menuItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-  { text: 'Positions', icon: <ShowChartIcon />, path: '/positions' },
-  { text: 'Account', icon: <AccountBalanceIcon />, path: '/account' },
-  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+interface MenuItem {
+  text: string;
+  icon?: React.ReactNode;
+  path: string;
+  subItems?: Omit<MenuItem, 'subItems'>[];
+}
+
+const menuItems: MenuItem[] = [
+  {
+    text: 'Dashboard',
+    icon: <DashboardIcon />,
+    path: '/',
+  },
+  {
+    text: 'Total',
+    icon: <ShowChartIcon />,
+    path: '/total',
+  },
+  {
+    text: 'NIFTY',
+    icon: <ShowChartIcon />,
+    path: '/nifty',
+    subItems: [
+      { text: 'JUN', path: '/nifty/jun' },
+      { text: 'JUL', path: '/nifty/jul' },
+      { text: 'AUG', path: '/nifty/aug' },
+    ],
+  },
+  {
+    text: 'BANKNIFTY',
+    icon: <ShowChartIcon />,
+    path: '/banknifty',
+    subItems: [
+      { text: 'JUN', path: '/banknifty/jun' },
+      { text: 'JUL', path: '/banknifty/jul' },
+      { text: 'AUG', path: '/banknifty/aug' },
+    ],
+  },
+  {
+    text: 'Account',
+    icon: <AccountBalanceIcon />,
+    path: '/account',
+  },
+  {
+    text: 'Settings',
+    icon: <SettingsIcon />,
+    path: '/settings',
+  },
 ];
 
-export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { mode, toggleTheme } = useCustomTheme();
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const { mode, toggleTheme } = useTheme();
+  const isMobile = useMediaQuery('(max-width:600px)');
+  const navigate = useNavigate();
 
   const handleDrawerToggle = () => {
     if (isMobile) {
@@ -49,126 +102,154 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     }
   };
 
+  const handleExpandClick = (path: string) => {
+    setExpandedItems(prev =>
+      prev.includes(path)
+        ? prev.filter(item => item !== path)
+        : [...prev, path]
+    );
+  };
+
+  const handleMenuClick = (path: string) => {
+    navigate(path);
+    if (isMobile) {
+      setMobileOpen(false);
+    }
+  };
+
   const drawer = (
-    <Box sx={{ 
-      height: '100%', 
-      display: 'flex', 
-      flexDirection: 'column',
-      bgcolor: 'background.paper'
-    }}>
+    <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
           F&O Dashboard
         </Typography>
       </Toolbar>
-      <List sx={{ flex: 1 }}>
+      <List>
         {menuItems.map((item) => (
-          <ListItemButton key={item.text}>
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
-          </ListItemButton>
+          <div key={item.path}>
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  if (item.subItems) {
+                    handleExpandClick(item.path);
+                  } else {
+                    handleMenuClick(item.path);
+                  }
+                }}
+              >
+                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemText primary={item.text} />
+                {item.subItems && (
+                  <ListItemSecondaryAction>
+                    {expandedItems.includes(item.path) ? <ExpandLess /> : <ExpandMore />}
+                  </ListItemSecondaryAction>
+                )}
+              </ListItemButton>
+            </ListItem>
+            {item.subItems && (
+              <Collapse in={expandedItems.includes(item.path)} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {item.subItems.map((subItem) => (
+                    <ListItem key={subItem.path} disablePadding>
+                      <ListItemButton 
+                        sx={{ pl: 4 }}
+                        onClick={() => handleMenuClick(subItem.path)}
+                      >
+                        <ListItemText primary={subItem.text} />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              </Collapse>
+            )}
+          </div>
         ))}
       </List>
-    </Box>
+    </div>
   );
 
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      height: '100%',
-      width: '100%',
-      overflow: 'hidden'
-    }}>
+    <Box sx={{ display: 'flex', height: '100vh' }}>
       <CssBaseline />
       <AppBar
         position="fixed"
         sx={{
           width: { sm: `calc(100% - ${isDrawerOpen ? drawerWidth : 0}px)` },
           ml: { sm: `${isDrawerOpen ? drawerWidth : 0}px` },
-          transition: theme.transitions.create(['margin', 'width'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-          }),
-          zIndex: theme.zIndex.drawer + 1,
+          transition: 'width 0.2s, margin-left 0.2s',
         }}
       >
         <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
+          {!isDrawerOpen && !isMobile && (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            F&O Dashboard
+            Futures & Options Dashboard
           </Typography>
           <IconButton color="inherit" onClick={toggleTheme}>
             {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
           </IconButton>
         </Toolbar>
       </AppBar>
-
-      <Drawer
-        variant={isMobile ? 'temporary' : 'permanent'}
-        open={isMobile ? mobileOpen : isDrawerOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{
-          keepMounted: true,
-        }}
-        sx={{
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            boxSizing: 'border-box',
-            borderRight: '1px solid rgba(0, 0, 0, 0.12)',
-            height: '100%',
-            overflow: 'hidden',
-            transition: theme.transitions.create('width', {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.leavingScreen,
-            }),
-            ...(isDrawerOpen ? {
-              width: drawerWidth,
-            } : {
-              width: 0,
-              border: 'none',
-            }),
-          },
+      <Box
+        component="nav"
+        sx={{ 
+          width: { sm: isDrawerOpen ? drawerWidth : 0 }, 
+          flexShrink: { sm: 0 },
+          position: 'fixed',
+          height: '100vh',
         }}
       >
-        {drawer}
-      </Drawer>
-
+        <Drawer
+          variant={isMobile ? 'temporary' : 'permanent'}
+          open={isMobile ? mobileOpen : isDrawerOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true,
+          }}
+          sx={{
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              transform: isDrawerOpen ? 'none' : 'translateX(-100%)',
+              transition: 'transform 0.2s',
+              position: 'relative',
+              height: '100vh',
+              borderRight: 'none',
+            },
+          }}
+        >
+          {drawer}
+        </Drawer>
+      </Box>
       <Box
         component="main"
         sx={{
           flexGrow: 1,
+          p: 0,
           width: { sm: `calc(100% - ${isDrawerOpen ? drawerWidth : 0}px)` },
           ml: { sm: `${isDrawerOpen ? drawerWidth : 0}px` },
-          transition: theme.transitions.create(['margin', 'width'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-          }),
-          height: '100%',
+          transition: 'width 0.2s, margin-left 0.2s',
+          height: '100vh',
           overflow: 'hidden',
+          bgcolor: 'background.default',
           display: 'flex',
           flexDirection: 'column',
-          bgcolor: 'background.default',
         }}
       >
         <Toolbar />
-        <Box sx={{ 
-          flex: 1, 
-          overflow: 'hidden',
-          p: 0,
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
           {children}
         </Box>
       </Box>
     </Box>
   );
-}; 
+}
